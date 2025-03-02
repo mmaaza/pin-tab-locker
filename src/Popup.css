@@ -122,3 +122,24 @@
 .cancel-button:hover {
   background-color: #4a5568;
 }
+
+.current-url {
+  margin: 10px 0;
+  padding: 5px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  word-break: break-all;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status-blocked {
+  color: #e53e3e;
+  font-weight: bold;
+}
+
+.status-unblocked {
+  color: #38a169;
+}

@@ -7,7 +7,8 @@ chrome.runtime.onInstalled.addListener(() => {
             chrome.storage.sync.set({ 
                 globalPin: null,
                 securityAnswer: null,
-                isSetup: false
+                isSetup: false,
+                blockedUrls: [] // Store blocked URLs here
             });
             console.log("Initial extension state configured");
         } else {
@@ -16,7 +17,37 @@ chrome.runtime.onInstalled.addListener(() => {
     });
 });
 
-let lockedTabs = {};
+// Function to normalize URLs for consistent comparison
+function normalizeUrl(url) {
+    try {
+        // Create a URL object to handle different formats
+        const urlObj = new URL(url);
+        // Return just the hostname and pathname for matching
+        return urlObj.hostname + urlObj.pathname;
+    } catch (e) {
+        console.error("Error normalizing URL:", e);
+        return url; // Return original if parsing fails
+    }
+}
+
+// Check if a URL is blocked
+function isUrlBlocked(url) {
+    return new Promise((resolve) => {
+        chrome.storage.sync.get(['blockedUrls'], (data) => {
+            const blockedUrls = data.blockedUrls || [];
+            const normalizedTestUrl = normalizeUrl(url);
+            
+            // Check if the normalized URL matches any blocked URL
+            for (const blockedUrl of blockedUrls) {
+                if (normalizedTestUrl.includes(normalizeUrl(blockedUrl))) {
+                    resolve(true);
+                    return;
+                }
+            }
+            resolve(false);
+        });
+    });
+}
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     let responseSent = false;
@@ -46,52 +77,99 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
     } else if (message.action === "checkStatus") {
         sendResponseOnce({ status: "active" });
-    } else if (message.action === "lockTab") {
-        // Handle lockTab action
-        chrome.storage.sync.get("globalPin", (data) => {
+    } else if (message.action === "blockUrl") {
+        // Handle blockUrl action (replacing lockTab)
+        chrome.storage.sync.get(["globalPin", "blockedUrls"], (data) => {
             if (data.globalPin === message.pin) {
-                lockedTabs[message.tabId] = true;
-                
-                // First try to message the content script (if it's already loaded)
-                chrome.tabs.sendMessage(message.tabId, { action: "addOverlay" }, (response) => {
-                    // If there's an error, the content script may not be loaded yet
-                    if (chrome.runtime.lastError) {
-                        console.log("Injecting content script for the first time");
-                        // Inject the content script
-                        chrome.scripting.executeScript({
-                            target: { tabId: message.tabId },
-                            files: ['contentScript.js']
-                        }, () => {
-                            if (chrome.runtime.lastError) {
-                                console.error("Script injection error:", chrome.runtime.lastError.message);
-                                sendResponseOnce({ status: "error locking tab", error: chrome.runtime.lastError.message });
-                            } else {
-                                // After injection, explicitly tell it to add the overlay
-                                setTimeout(() => {
-                                    chrome.tabs.sendMessage(message.tabId, { action: "addOverlay" });
-                                }, 100);
-                                sendResponseOnce({ status: "tab locked" });
-                            }
-                        });
+                // Get the current tab's URL
+                chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+                    if (tabs && tabs.length > 0) {
+                        const currentUrl = tabs[0].url;
+                        const tabId = tabs[0].id;
+                        
+                        // Add URL to blocked list if not already blocked
+                        let blockedUrls = data.blockedUrls || [];
+                        const normalizedUrl = normalizeUrl(currentUrl);
+                        
+                        // Check if URL is already blocked
+                        const isAlreadyBlocked = blockedUrls.some(url => 
+                            normalizeUrl(url) === normalizedUrl
+                        );
+                        
+                        if (!isAlreadyBlocked) {
+                            blockedUrls.push(currentUrl);
+                            chrome.storage.sync.set({ blockedUrls }, () => {
+                                console.log("URL blocked:", currentUrl);
+                                
+                                // Apply overlay to current tab
+                                chrome.tabs.sendMessage(tabId, { action: "addOverlay" }, (response) => {
+                                    if (chrome.runtime.lastError) {
+                                        console.log("Injecting content script for blocked URL");
+                                        chrome.scripting.executeScript({
+                                            target: { tabId },
+                                            files: ['contentScript.js']
+                                        }, () => {
+                                            if (chrome.runtime.lastError) {
+                                                console.error("Script injection error:", chrome.runtime.lastError.message);
+                                                sendResponseOnce({ status: "error blocking URL", error: chrome.runtime.lastError.message });
+                                            } else {
+                                                setTimeout(() => {
+                                                    chrome.tabs.sendMessage(tabId, { action: "addOverlay" });
+                                                }, 100);
+                                                sendResponseOnce({ status: "URL blocked" });
+                                            }
+                                        });
+                                    } else {
+                                        sendResponseOnce({ status: "URL blocked" });
+                                    }
+                                });
+                            });
+                        } else {
+                            sendResponseOnce({ status: "URL already blocked" });
+                        }
                     } else {
-                        console.log("Content script already loaded, overlay added");
-                        sendResponseOnce({ status: "tab locked" });
+                        sendResponseOnce({ status: "no active tab found" });
                     }
                 });
             } else {
                 sendResponseOnce({ status: "incorrect PIN" });
             }
         });
-    } else if (message.action === "unlockTab") {
-        // Handle unlockTab action
-        chrome.storage.sync.get("globalPin", (data) => {
+    } else if (message.action === "unblockUrl") {
+        // Handle unblockUrl action (replacing unlockTab)
+        chrome.storage.sync.get(["globalPin", "blockedUrls"], (data) => {
             if (data.globalPin === message.pin) {
-                delete lockedTabs[message.tabId];
-                chrome.tabs.sendMessage(message.tabId, { action: "removeOverlay" }, (response) => {
-                    if (chrome.runtime.lastError) {
-                        console.error("Error removing overlay:", chrome.runtime.lastError);
+                // Get the current tab's URL
+                chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+                    if (tabs && tabs.length > 0) {
+                        const currentUrl = tabs[0].url;
+                        const tabId = tabs[0].id;
+                        const normalizedUrl = normalizeUrl(currentUrl);
+                        
+                        // Remove the URL from blocked list
+                        let blockedUrls = data.blockedUrls || [];
+                        const filteredUrls = blockedUrls.filter(url => 
+                            normalizeUrl(url) !== normalizedUrl
+                        );
+                        
+                        if (filteredUrls.length < blockedUrls.length) {
+                            chrome.storage.sync.set({ blockedUrls: filteredUrls }, () => {
+                                console.log("URL unblocked:", currentUrl);
+                                
+                                // Remove overlay from the current tab
+                                chrome.tabs.sendMessage(tabId, { action: "removeOverlay" }, (response) => {
+                                    if (chrome.runtime.lastError) {
+                                        console.error("Error removing overlay:", chrome.runtime.lastError);
+                                    }
+                                    sendResponseOnce({ status: "URL unblocked" });
+                                });
+                            });
+                        } else {
+                            sendResponseOnce({ status: "URL not found in blocked list" });
+                        }
+                    } else {
+                        sendResponseOnce({ status: "no active tab found" });
                     }
-                    sendResponseOnce({ status: "tab unlocked" });
                 });
             } else {
                 sendResponseOnce({ status: "incorrect PIN" });
@@ -108,15 +186,52 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 sendResponseOnce({ status: "incorrect answer", success: false });
             }
         });
+    } else if (message.action === "checkIfUrlBlocked") {
+        // New action to check if current URL is blocked
+        chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+            if (tabs && tabs.length > 0) {
+                const currentUrl = tabs[0].url;
+                const isBlocked = await isUrlBlocked(currentUrl);
+                sendResponseOnce({ isBlocked });
+            } else {
+                sendResponseOnce({ isBlocked: false });
+            }
+        });
     } else {
         sendResponseOnce({ status: "unknown action" });
     }
     return true; // Indicate that the response is asynchronous
 });
 
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    if (lockedTabs[tabId] && changeInfo.url) {
-        chrome.tabs.update(tabId, { url: tab.url });
-        alert("This tab is locked and cannot be changed.");
+// Listen for tab updates to check for blocked URLs
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+    // Only check when the URL is updated or page is loaded
+    if (changeInfo.url || changeInfo.status === 'complete') {
+        const url = tab.url || changeInfo.url;
+        
+        if (url) {
+            const isBlocked = await isUrlBlocked(url);
+            
+            if (isBlocked) {
+                console.log("Blocked URL detected:", url);
+                
+                // Apply the overlay
+                chrome.tabs.sendMessage(tabId, { action: "addOverlay" }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        console.log("Injecting content script for blocked URL");
+                        chrome.scripting.executeScript({
+                            target: { tabId },
+                            files: ['contentScript.js']
+                        }, () => {
+                            if (!chrome.runtime.lastError) {
+                                setTimeout(() => {
+                                    chrome.tabs.sendMessage(tabId, { action: "addOverlay" });
+                                }, 100);
+                            }
+                        });
+                    }
+                });
+            }
+        }
     }
 });

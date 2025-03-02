@@ -11,6 +11,8 @@ function Popup() {
     const [securityAnswer, setSecurityAnswer] = useState("");
     const [newPin, setNewPin] = useState("");
     const [confirmNewPin, setConfirmNewPin] = useState("");
+    const [currentUrl, setCurrentUrl] = useState("");
+    const [isUrlBlocked, setIsUrlBlocked] = useState(false);
 
     // Check if global PIN is already set
     useEffect(() => {
@@ -26,56 +28,71 @@ function Popup() {
             }
             setIsLoading(false);
         });
+
+        // Get current URL
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            if (tabs && tabs.length > 0 && tabs[0].url) {
+                setCurrentUrl(tabs[0].url);
+                
+                // Check if current URL is blocked
+                chrome.runtime.sendMessage({ action: "checkIfUrlBlocked" }, (response) => {
+                    if (response) {
+                        setIsUrlBlocked(response.isBlocked);
+                    }
+                });
+            }
+        });
     }, []);
 
     const handleSetupComplete = () => {
         setIsSetupComplete(true);
     };
 
-    const lockTab = async () => {
+    const blockUrl = async () => {
         if (pin) {
             try {
-                let [tab] = await chrome.tabs.query({
-                    active: true,
-                    currentWindow: true,
-                });
                 chrome.runtime.sendMessage({
-                    action: "lockTab",
+                    action: "blockUrl",
                     pin,
-                    tabId: tab.id,
                 }, (response) => {
                     if (chrome.runtime.lastError) {
                         setStatus("Error: " + chrome.runtime.lastError.message);
                     } else {
                         setStatus(response.status);
+                        if (response.status === "URL blocked" || response.status === "URL already blocked") {
+                            setIsUrlBlocked(true);
+                        }
                     }
                 });
             } catch (error) {
-                setStatus("Error locking tab: " + error.message);
+                setStatus("Error blocking URL: " + error.message);
             }
         } else {
-            setStatus("PIN is required to lock the tab.");
+            setStatus("PIN is required to block the URL.");
         }
     };
 
-    const unlockTab = async () => {
-        try {
-            let [tab] = await chrome.tabs.query({
-                active: true,
-                currentWindow: true,
-            });
-            chrome.runtime.sendMessage(
-                { action: "unlockTab", pin, tabId: tab.id },
-                (response) => {
+    const unblockUrl = async () => {
+        if (pin) {
+            try {
+                chrome.runtime.sendMessage({
+                    action: "unblockUrl",
+                    pin,
+                }, (response) => {
                     if (chrome.runtime.lastError) {
                         setStatus("Error: " + chrome.runtime.lastError.message);
                     } else {
                         setStatus(response.status);
+                        if (response.status === "URL unblocked") {
+                            setIsUrlBlocked(false);
+                        }
                     }
-                }
-            );
-        } catch (error) {
-            setStatus("Error unlocking tab: " + error.message);
+                });
+            } catch (error) {
+                setStatus("Error unblocking URL: " + error.message);
+            }
+        } else {
+            setStatus("PIN is required to unblock the URL.");
         }
     };
 
@@ -200,11 +217,24 @@ function Popup() {
         );
     }
 
+    // Format the URL for display
+    const displayUrl = currentUrl ? 
+        (new URL(currentUrl)).hostname : 
+        "current site";
+
     return (
         <div className="popup-container">
             <h2 className="popup-title">
                 🔒 Pin Tab Locker
             </h2>
+            
+            <div className="current-url">
+                {displayUrl}
+                <span className={isUrlBlocked ? "status-blocked" : "status-unblocked"}>
+                    {isUrlBlocked ? " (Blocked)" : " (Not Blocked)"}
+                </span>
+            </div>
+
             <input
                 type="password"
                 placeholder="Enter PIN"
@@ -212,18 +242,23 @@ function Popup() {
                 onChange={(e) => setPin(e.target.value)}
                 className="popup-input"
             />
-            <button
-                onClick={lockTab}
-                className="popup-button lock-button"
-            >
-                Lock Tab
-            </button>
-            <button
-                onClick={unlockTab}
-                className="popup-button unlock-button"
-            >
-                Unlock Tab
-            </button>
+            
+            {!isUrlBlocked ? (
+                <button
+                    onClick={blockUrl}
+                    className="popup-button lock-button"
+                >
+                    Block URL
+                </button>
+            ) : (
+                <button
+                    onClick={unblockUrl}
+                    className="popup-button unlock-button"
+                >
+                    Unblock URL
+                </button>
+            )}
+            
             <button
                 onClick={startPinReset}
                 className="popup-button forgot-button"
