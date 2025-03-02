@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import "./Popup.css";
 import SetupPin from "./SetupPin";
+import BlockedUrlsList from "./BlockedUrlsList";
 
 function Popup() {
     const [pin, setPin] = useState("");
@@ -8,6 +9,7 @@ function Popup() {
     const [isSetupComplete, setIsSetupComplete] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [isResetting, setIsResetting] = useState(false);
+    const [viewingBlockedList, setViewingBlockedList] = useState(false);
     const [securityAnswer, setSecurityAnswer] = useState("");
     const [newPin, setNewPin] = useState("");
     const [confirmNewPin, setConfirmNewPin] = useState("");
@@ -59,16 +61,16 @@ function Popup() {
                         setStatus("Error: " + chrome.runtime.lastError.message);
                     } else {
                         setStatus(response.status);
-                        if (response.status === "URL blocked" || response.status === "URL already blocked") {
+                        if (response.status === "Domain blocked" || response.status === "Domain already blocked") {
                             setIsUrlBlocked(true);
                         }
                     }
                 });
             } catch (error) {
-                setStatus("Error blocking URL: " + error.message);
+                setStatus("Error blocking domain: " + error.message);
             }
         } else {
-            setStatus("PIN is required to block the URL.");
+            setStatus("PIN is required to block the domain.");
         }
     };
 
@@ -83,16 +85,16 @@ function Popup() {
                         setStatus("Error: " + chrome.runtime.lastError.message);
                     } else {
                         setStatus(response.status);
-                        if (response.status === "URL unblocked") {
+                        if (response.status === "Domain unblocked") {
                             setIsUrlBlocked(false);
                         }
                     }
                 });
             } catch (error) {
-                setStatus("Error unblocking URL: " + error.message);
+                setStatus("Error unblocking domain: " + error.message);
             }
         } else {
-            setStatus("PIN is required to unblock the URL.");
+            setStatus("PIN is required to unblock the domain.");
         }
     };
 
@@ -146,6 +148,14 @@ function Popup() {
         });
     };
 
+    const viewBlockedUrls = () => {
+        setViewingBlockedList(true);
+    };
+
+    const exitBlockedUrlsList = () => {
+        setViewingBlockedList(false);
+    };
+
     // Show loading state
     if (isLoading) {
         return (
@@ -157,6 +167,10 @@ function Popup() {
 
     if (!isSetupComplete) {
         return <SetupPin onSetupComplete={handleSetupComplete} />;
+    }
+
+    if (viewingBlockedList) {
+        return <BlockedUrlsList onBack={exitBlockedUrlsList} />;
     }
 
     if (isResetting) {
@@ -225,12 +239,17 @@ function Popup() {
     return (
         <div className="popup-container">
             <h2 className="popup-title">
-                🔒 Pin Tab Locker
+                <span className="title-icon">🔒</span>
+                <span className="title-text">Tab Protec</span>
             </h2>
-            
+
             <div className="current-url">
                 {displayUrl}
-                <span className={isUrlBlocked ? "status-blocked" : "status-unblocked"}>
+                <span
+                    className={
+                        isUrlBlocked ? "status-blocked" : "status-unblocked"
+                    }
+                >
                     {isUrlBlocked ? " (Blocked)" : " (Not Blocked)"}
                 </span>
             </div>
@@ -244,35 +263,35 @@ function Popup() {
                     className="popup-input"
                 />
             </div>
-            
+
             {!isUrlBlocked ? (
-                <button
-                    onClick={blockUrl}
-                    className="popup-button lock-button"
-                >
-                    Block URL
+                <button onClick={blockUrl} className="popup-button lock-button">
+                    Block Domain
                 </button>
             ) : (
                 <button
                     onClick={unblockUrl}
                     className="popup-button unlock-button"
                 >
-                    Unblock URL
+                    Unblock Domain
                 </button>
             )}
-            
+
+            <button
+                onClick={viewBlockedUrls}
+                className="popup-button list-button"
+            >
+                View Blocked URLs
+            </button>
+
             <button
                 onClick={startPinReset}
                 className="popup-button forgot-button"
             >
                 Forgot PIN?
             </button>
-            
-            {status && (
-                <div className="status-message">
-                    {status}
-                </div>
-            )}
+
+            {status && <div className="status-message">{status}</div>}
         </div>
     );
 }

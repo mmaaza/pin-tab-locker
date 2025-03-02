@@ -17,29 +17,30 @@ chrome.runtime.onInstalled.addListener(() => {
     });
 });
 
-// Function to normalize URLs for consistent comparison
+// Function to normalize URLs to extract base domain
 function normalizeUrl(url) {
     try {
         // Create a URL object to handle different formats
         const urlObj = new URL(url);
-        // Return just the hostname and pathname for matching
-        return urlObj.hostname + urlObj.pathname;
+        // Return just the hostname (domain) for domain-level blocking
+        return urlObj.hostname;
     } catch (e) {
         console.error("Error normalizing URL:", e);
         return url; // Return original if parsing fails
     }
 }
 
-// Check if a URL is blocked
+// Check if a URL's domain is blocked
 function isUrlBlocked(url) {
     return new Promise((resolve) => {
         chrome.storage.sync.get(['blockedUrls'], (data) => {
             const blockedUrls = data.blockedUrls || [];
-            const normalizedTestUrl = normalizeUrl(url);
+            const normalizedTestDomain = normalizeUrl(url);
             
-            // Check if the normalized URL matches any blocked URL
+            // Check if the domain is in the blocked list
             for (const blockedUrl of blockedUrls) {
-                if (normalizedTestUrl.includes(normalizeUrl(blockedUrl))) {
+                const blockedDomain = normalizeUrl(blockedUrl);
+                if (normalizedTestDomain === blockedDomain) {
                     resolve(true);
                     return;
                 }
@@ -87,45 +88,48 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                         const currentUrl = tabs[0].url;
                         const tabId = tabs[0].id;
                         
-                        // Add URL to blocked list if not already blocked
-                        let blockedUrls = data.blockedUrls || [];
-                        const normalizedUrl = normalizeUrl(currentUrl);
+                        // Extract the domain for blocking
+                        const domain = normalizeUrl(currentUrl);
                         
-                        // Check if URL is already blocked
-                        const isAlreadyBlocked = blockedUrls.some(url => 
-                            normalizeUrl(url) === normalizedUrl
+                        // Add domain to blocked list if not already blocked
+                        let blockedUrls = data.blockedUrls || [];
+                        
+                        // Check if domain is already blocked
+                        const isAlreadyBlocked = blockedUrls.some(blockedUrl => 
+                            normalizeUrl(blockedUrl) === domain
                         );
                         
                         if (!isAlreadyBlocked) {
+                            // Store the full URL but will match by domain
                             blockedUrls.push(currentUrl);
                             chrome.storage.sync.set({ blockedUrls }, () => {
-                                console.log("URL blocked:", currentUrl);
+                                console.log("Domain blocked:", domain, "Original URL:", currentUrl);
                                 
                                 // Apply overlay to current tab
                                 chrome.tabs.sendMessage(tabId, { action: "addOverlay" }, (response) => {
                                     if (chrome.runtime.lastError) {
-                                        console.log("Injecting content script for blocked URL");
+                                        console.log("Injecting content script for blocked domain");
                                         chrome.scripting.executeScript({
                                             target: { tabId },
                                             files: ['contentScript.js']
                                         }, () => {
                                             if (chrome.runtime.lastError) {
                                                 console.error("Script injection error:", chrome.runtime.lastError.message);
-                                                sendResponseOnce({ status: "error blocking URL", error: chrome.runtime.lastError.message });
+                                                sendResponseOnce({ status: "error blocking domain", error: chrome.runtime.lastError.message });
                                             } else {
                                                 setTimeout(() => {
                                                     chrome.tabs.sendMessage(tabId, { action: "addOverlay" });
                                                 }, 100);
-                                                sendResponseOnce({ status: "URL blocked" });
+                                                sendResponseOnce({ status: "Domain blocked" });
                                             }
                                         });
                                     } else {
-                                        sendResponseOnce({ status: "URL blocked" });
+                                        sendResponseOnce({ status: "Domain blocked" });
                                     }
                                 });
                             });
                         } else {
-                            sendResponseOnce({ status: "URL already blocked" });
+                            sendResponseOnce({ status: "Domain already blocked" });
                         }
                     } else {
                         sendResponseOnce({ status: "no active tab found" });
@@ -144,28 +148,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     if (tabs && tabs.length > 0) {
                         const currentUrl = tabs[0].url;
                         const tabId = tabs[0].id;
-                        const normalizedUrl = normalizeUrl(currentUrl);
+                        const currentDomain = normalizeUrl(currentUrl);
                         
-                        // Remove the URL from blocked list
+                        // Remove the domain from blocked list
                         let blockedUrls = data.blockedUrls || [];
                         const filteredUrls = blockedUrls.filter(url => 
-                            normalizeUrl(url) !== normalizedUrl
+                            normalizeUrl(url) !== currentDomain
                         );
                         
                         if (filteredUrls.length < blockedUrls.length) {
                             chrome.storage.sync.set({ blockedUrls: filteredUrls }, () => {
-                                console.log("URL unblocked:", currentUrl);
+                                console.log("Domain unblocked:", currentDomain);
                                 
                                 // Remove overlay from the current tab
                                 chrome.tabs.sendMessage(tabId, { action: "removeOverlay" }, (response) => {
                                     if (chrome.runtime.lastError) {
                                         console.error("Error removing overlay:", chrome.runtime.lastError);
                                     }
-                                    sendResponseOnce({ status: "URL unblocked" });
+                                    sendResponseOnce({ status: "Domain unblocked" });
                                 });
                             });
                         } else {
-                            sendResponseOnce({ status: "URL not found in blocked list" });
+                            sendResponseOnce({ status: "Domain not found in blocked list" });
                         }
                     } else {
                         sendResponseOnce({ status: "no active tab found" });
@@ -195,6 +199,39 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 sendResponseOnce({ isBlocked });
             } else {
                 sendResponseOnce({ isBlocked: false });
+            }
+        });
+    } else if (message.action === "unblockUrlFromList") {
+        // Handle unblocking a specific URL from the list view
+        chrome.storage.sync.get(["globalPin", "blockedUrls"], (data) => {
+            if (data.globalPin === message.pin) {
+                // Remove the specified URL from the blocked list
+                let blockedUrls = data.blockedUrls || [];
+                const normalizedUrl = normalizeUrl(message.url);
+                
+                const filteredUrls = blockedUrls.filter(url => 
+                    normalizeUrl(url) !== normalizedUrl
+                );
+                
+                if (filteredUrls.length < blockedUrls.length) {
+                    chrome.storage.sync.set({ blockedUrls: filteredUrls }, () => {
+                        console.log("URL unblocked from list:", message.url);
+                        sendResponseOnce({ 
+                            status: "URL unblocked successfully", 
+                            success: true 
+                        });
+                    });
+                } else {
+                    sendResponseOnce({ 
+                        status: "URL not found in blocked list", 
+                        success: false 
+                    });
+                }
+            } else {
+                sendResponseOnce({ 
+                    status: "Incorrect PIN", 
+                    success: false 
+                });
             }
         });
     } else {
