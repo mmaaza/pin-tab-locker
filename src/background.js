@@ -1,6 +1,19 @@
 chrome.runtime.onInstalled.addListener(() => {
     console.log("Pin Tab Locker extension installed!");
-    chrome.storage.sync.set({ globalPin: null });
+    // Check if values already exist before setting defaults
+    chrome.storage.sync.get(['isSetup'], (data) => {
+        if (data.isSetup === undefined) {
+            // Only set initial values if not already configured
+            chrome.storage.sync.set({ 
+                globalPin: null,
+                securityAnswer: null,
+                isSetup: false
+            });
+            console.log("Initial extension state configured");
+        } else {
+            console.log("Extension already configured, current setup state:", data.isSetup);
+        }
+    });
 });
 
 let lockedTabs = {};
@@ -15,27 +28,56 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
     };
 
-    if (message.action === "checkStatus") {
-        sendResponseOnce({ status: "active" });
-    } else if (message.action === "setGlobalPin") {
-        // Handle setting the global PIN
-        chrome.storage.sync.set({ globalPin: message.pin }, () => {
-            sendResponseOnce({ status: "PIN set" });
+    if (message.action === "isPinSetup") {
+        chrome.storage.sync.get(["isSetup"], (data) => {
+            // Be explicit about the isSetup value, ensure it's a boolean
+            const isSetupComplete = data.isSetup === true;
+            console.log("isPinSetup check - result:", isSetupComplete);
+            sendResponseOnce({ isSetup: isSetupComplete });
         });
+    } else if (message.action === "setupGlobalPin") {
+        // Handle initial PIN setup with security question
+        chrome.storage.sync.set({ 
+            globalPin: message.pin,
+            securityAnswer: message.securityAnswer.toLowerCase(),
+            isSetup: true 
+        }, () => {
+            sendResponseOnce({ status: "Setup complete", success: true });
+        });
+    } else if (message.action === "checkStatus") {
+        sendResponseOnce({ status: "active" });
     } else if (message.action === "lockTab") {
         // Handle lockTab action
         chrome.storage.sync.get("globalPin", (data) => {
             if (data.globalPin === message.pin) {
                 lockedTabs[message.tabId] = true;
-                chrome.scripting.executeScript({
-                    target: { tabId: message.tabId },
-                    files: ['contentScript.js']
-                }, () => {
+                
+                // First try to message the content script (if it's already loaded)
+                chrome.tabs.sendMessage(message.tabId, { action: "addOverlay" }, (response) => {
+                    // If there's an error, the content script may not be loaded yet
                     if (chrome.runtime.lastError) {
-                        console.error(chrome.runtime.lastError.message);
+                        console.log("Injecting content script for the first time");
+                        // Inject the content script
+                        chrome.scripting.executeScript({
+                            target: { tabId: message.tabId },
+                            files: ['contentScript.js']
+                        }, () => {
+                            if (chrome.runtime.lastError) {
+                                console.error("Script injection error:", chrome.runtime.lastError.message);
+                                sendResponseOnce({ status: "error locking tab", error: chrome.runtime.lastError.message });
+                            } else {
+                                // After injection, explicitly tell it to add the overlay
+                                setTimeout(() => {
+                                    chrome.tabs.sendMessage(message.tabId, { action: "addOverlay" });
+                                }, 100);
+                                sendResponseOnce({ status: "tab locked" });
+                            }
+                        });
+                    } else {
+                        console.log("Content script already loaded, overlay added");
+                        sendResponseOnce({ status: "tab locked" });
                     }
                 });
-                sendResponseOnce({ status: "tab locked" });
             } else {
                 sendResponseOnce({ status: "incorrect PIN" });
             }
@@ -45,16 +87,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         chrome.storage.sync.get("globalPin", (data) => {
             if (data.globalPin === message.pin) {
                 delete lockedTabs[message.tabId];
-                chrome.tabs.sendMessage(message.tabId, { action: "removeOverlay" });
-                sendResponseOnce({ status: "tab unlocked" });
+                chrome.tabs.sendMessage(message.tabId, { action: "removeOverlay" }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        console.error("Error removing overlay:", chrome.runtime.lastError);
+                    }
+                    sendResponseOnce({ status: "tab unlocked" });
+                });
             } else {
                 sendResponseOnce({ status: "incorrect PIN" });
             }
         });
-    } else if (message.action === "resetGlobalPin") {
-        // Handle resetting the global PIN
-        chrome.storage.sync.set({ globalPin: null }, () => {
-            sendResponseOnce({ status: "PIN reset" });
+    } else if (message.action === "resetPinWithSecurity") {
+        // Handle PIN reset with security question
+        chrome.storage.sync.get(["securityAnswer"], (data) => {
+            if (data.securityAnswer === message.securityAnswer.toLowerCase()) {
+                chrome.storage.sync.set({ globalPin: message.newPin }, () => {
+                    sendResponseOnce({ status: "PIN reset", success: true });
+                });
+            } else {
+                sendResponseOnce({ status: "incorrect answer", success: false });
+            }
         });
     } else {
         sendResponseOnce({ status: "unknown action" });
