@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pin Tab Locker</title>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            chrome.runtime.sendMessage({ action: "checkStatus" }, (response) => {
+                if (chrome.runtime.lastError) {
+                    console.error(chrome.runtime.lastError);
+                } else {
+                    console.log('Status:', response.status);
+                }
+            });
+        });
+    </script>
+</head>
+<body>
+    <h1>Pin Tab Locker</h1>
+</body>
+</html>

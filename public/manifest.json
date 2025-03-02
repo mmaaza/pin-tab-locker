@@ -1,0 +1,15 @@
+{
+    "manifest_version": 3,
+    "name": "Pin Tab Locker",
+    "version": "1.0",
+    "description": "Lock tabs with a PIN to prevent access",
+    "permissions": ["storage", "tabs", "management", "scripting", "activeTab"],
+    "background": {
+        "service_worker": "background.js"
+    },
+    "action": {
+        "default_popup": "index.html",
+        "default_icon": "icon.png"
+    },
+    "host_permissions": ["<all_urls>"]
+}
