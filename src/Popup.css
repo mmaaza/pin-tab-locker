@@ -1,145 +1,224 @@
+:root {
+  --primary-color: #2563eb;
+  --primary-hover: #1d4ed8;
+  --success-color: #10b981;
+  --success-hover: #059669;
+  --danger-color: #ef4444;
+  --warning-color: #f59e0b;
+  --neutral-color: #64748b;
+  --neutral-hover: #475569;
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8fafc;
+  --border-color: #e2e8f0;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: var(--text-primary);
+  margin: 0;
+}
+
 .popup-container {
-    width: 16rem;
-    padding: 1rem;
-    background-color: white;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    border-radius: 0.5rem;
-    text-align: center;
+  width: 320px;
+  padding: 1.5rem;
+  background-color: var(--bg-primary);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  border-radius: 0.75rem;
 }
 
 .popup-title {
-    font-size: 1.125rem;
-    font-weight: 600;
-    color: #2d3748;
-}
-
-.popup-input {
-    width: 100%;
-    margin-top: 1rem;
-    padding: 0.5rem;
-    border: 1px solid #e2e8f0;
-    border-radius: 0.375rem;
-    text-align: center;
-    outline: none;
-    transition: box-shadow 0.2s;
-}
-
-.popup-input:focus {
-    box-shadow: 0 0 0 2px #4299e1;
-}
-
-.popup-button {
-    width: 100%;
-    margin-top: 0.75rem;
-    padding: 0.5rem;
-    color: white;
-    border-radius: 0.375rem;
-    transition: background-color 0.2s;
-}
-
-.lock-button {
-    background-color: #3182ce;
-}
-
-.lock-button:hover {
-    background-color: #2b6cb0;
-}
-
-.unlock-button {
-    background-color: #38a169;
-}
-
-.unlock-button:hover {
-    background-color: #2f855a;
-}
-
-.status-message {
-  margin-top: 10px;
-  padding: 5px;
-  text-align: center;
-  font-size: 0.9rem;
-  color: #333;
-  background-color: #f8f9fa;
-  border-radius: 4px;
-  border: 1px solid #dee2e6;
-}
-
-.set-button {
-  background-color: #17a2b8;
-}
-
-.set-button:hover {
-  background-color: #138496;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
 }
 
 .form-group {
-  margin-bottom: 12px;
+  margin-bottom: 1rem;
+  position: relative;
+}
+
+.popup-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  font-size: 0.95rem;
+  outline: none;
+  transition: all 0.2s ease;
+  background-color: var(--bg-secondary);
+  box-sizing: border-box;
+}
+
+.popup-input:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.popup-input::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+
+.popup-button {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-weight: 500;
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.lock-button {
+  background-color: var(--primary-color);
+}
+
+.lock-button:hover {
+  background-color: var(--primary-hover);
+}
+
+.unlock-button {
+  background-color: var(--success-color);
+}
+
+.unlock-button:hover {
+  background-color: var(--success-hover);
+}
+
+.set-button {
+  background-color: var(--primary-color);
+}
+
+.set-button:hover {
+  background-color: var(--primary-hover);
+}
+
+.reset-button {
+  background-color: var(--warning-color);
+}
+
+.reset-button:hover {
+  background-color: #d97706;
+}
+
+.forgot-button {
+  background-color: var(--neutral-color);
+  margin-top: 1rem;
+  font-size: 0.9rem;
+}
+
+.forgot-button:hover {
+  background-color: var(--neutral-hover);
+}
+
+.cancel-button {
+  background-color: var(--neutral-color);
+}
+
+.cancel-button:hover {
+  background-color: var(--neutral-hover);
 }
 
 .security-question {
   display: block;
-  margin-bottom: 5px;
-  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
   text-align: left;
-  color: #4a5568;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.status-message {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  background-color: var(--bg-secondary);
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  animation: fadeIn 0.3s ease;
 }
 
 .error-message {
-  margin-top: 10px;
-  padding: 5px;
+  margin-top: 1rem;
+  padding: 0.75rem;
   text-align: center;
   font-size: 0.9rem;
-  color: #e53e3e;
-  background-color: #fed7d7;
-  border-radius: 4px;
-  border: 1px solid #feb2b2;
+  color: var(--danger-color);
+  background-color: #fef2f2;
+  border-radius: 0.5rem;
+  border: 1px solid #fee2e2;
+  animation: fadeIn 0.3s ease;
 }
 
 .button-group {
   display: flex;
-  gap: 8px;
-  margin-top: 12px;
+  gap: 0.75rem;
+  margin-top: 1rem;
 }
 
 .button-group .popup-button {
   margin-top: 0;
-  width: 50%;
-}
-
-.forgot-button {
-  background-color: #718096;
-  margin-top: 12px;
-}
-
-.forgot-button:hover {
-  background-color: #4a5568;
-}
-
-.cancel-button {
-  background-color: #718096;
-}
-
-.cancel-button:hover {
-  background-color: #4a5568;
+  flex: 1;
 }
 
 .current-url {
-  margin: 10px 0;
-  padding: 5px;
-  background-color: #f8f9fa;
-  border-radius: 4px;
-  font-size: 0.9rem;
+  margin: 1rem 0 1.25rem;
+  padding: 0.75rem;
+  background-color: var(--bg-secondary);
+  border-radius: 0.5rem;
+  font-size: 0.95rem;
   word-break: break-all;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  position: relative;
+}
+
+.current-url::before {
+  content: "🔗";
+  margin-right: 0.25rem;
 }
 
 .status-blocked {
-  color: #e53e3e;
-  font-weight: bold;
+  color: var(--danger-color);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
 }
 
 .status-unblocked {
-  color: #38a169;
+  color: var(--success-color);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

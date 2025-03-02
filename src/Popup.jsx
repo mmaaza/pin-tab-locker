@@ -235,13 +235,15 @@ function Popup() {
                 </span>
             </div>
 
-            <input
-                type="password"
-                placeholder="Enter PIN"
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                className="popup-input"
-            />
+            <div className="form-group">
+                <input
+                    type="password"
+                    placeholder="Enter PIN"
+                    value={pin}
+                    onChange={(e) => setPin(e.target.value)}
+                    className="popup-input"
+                />
+            </div>
             
             {!isUrlBlocked ? (
                 <button
