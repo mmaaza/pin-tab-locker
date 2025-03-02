@@ -51,6 +51,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 sendResponseOnce({ status: "incorrect PIN" });
             }
         });
+    } else if (message.action === "resetGlobalPin") {
+        // Handle resetting the global PIN
+        chrome.storage.sync.set({ globalPin: null }, () => {
+            sendResponseOnce({ status: "PIN reset" });
+        });
     } else {
         sendResponseOnce({ status: "unknown action" });
     }
