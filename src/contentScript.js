@@ -88,6 +88,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     } else if (message.action === "removeOverlay") {
         removeOverlay();
         sendResponse({ status: "overlay removed" });
+    } else if (message.action === "checkOverlayStatus") {
+        // New action to check if overlay is currently active
+        sendResponse({ hasOverlay: overlayActive });
     }
     
     return true; // Required for async response

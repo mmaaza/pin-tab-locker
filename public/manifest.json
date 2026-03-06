@@ -3,7 +3,7 @@
     "name": "Pin Tab Locker",
     "version": "1.0",
     "description": "Lock tabs with a PIN to prevent access",
-    "permissions": ["storage", "tabs", "management", "scripting", "activeTab"],
+    "permissions": ["storage", "tabs", "management", "scripting", "activeTab", "alarms"],
     "background": {
         "service_worker": "background.js"
     },

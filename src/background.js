@@ -8,12 +8,18 @@ chrome.runtime.onInstalled.addListener(() => {
                 globalPin: null,
                 securityAnswer: null,
                 isSetup: false,
-                blockedUrls: [] // Store blocked URLs here
+                blockedUrls: [], // Store blocked URLs here
+                scheduledBlocks: [] // Store scheduled blocks
             });
             console.log("Initial extension state configured");
         } else {
             console.log("Extension already configured, current setup state:", data.isSetup);
         }
+    });
+    
+    // Set up alarm for checking scheduled blocks
+    chrome.alarms.create("checkScheduledBlocks", {
+        periodInMinutes: 1
     });
 });
 
@@ -33,8 +39,9 @@ function normalizeUrl(url) {
 // Check if a URL's domain is blocked
 function isUrlBlocked(url) {
     return new Promise((resolve) => {
-        chrome.storage.sync.get(['blockedUrls'], (data) => {
+        chrome.storage.sync.get(['blockedUrls', 'scheduledBlocks'], (data) => {
             const blockedUrls = data.blockedUrls || [];
+            const scheduledBlocks = data.scheduledBlocks || [];
             const normalizedTestDomain = normalizeUrl(url);
             
             // Check if the domain is in the blocked list
@@ -45,9 +52,46 @@ function isUrlBlocked(url) {
                     return;
                 }
             }
+            
+            // Check if domain is currently scheduled for blocking
+            const isScheduledBlocked = isScheduledBlockActive(normalizedTestDomain, scheduledBlocks);
+            if (isScheduledBlocked) {
+                resolve(true);
+                return;
+            }
+            
             resolve(false);
         });
     });
+}
+
+// Check if any scheduled block is currently active for the domain
+function isScheduledBlockActive(domain, scheduledBlocks) {
+    if (!scheduledBlocks || scheduledBlocks.length === 0) return false;
+    
+    const now = new Date();
+    const currentDay = now.getDay(); // 0-6 (Sunday-Saturday)
+    
+    // Format: HH:MM in 24-hour
+    const currentTime = now.getHours().toString().padStart(2, '0') + ':' + 
+                        now.getMinutes().toString().padStart(2, '0');
+    
+    for (const block of scheduledBlocks) {
+        if (!block.enabled) continue;
+        
+        // Check if domain matches (simple string match for now)
+        if (domain.includes(block.domainPattern) || block.domainPattern === '*') {
+            // Check if today is a blocked day
+            if (block.days.includes(currentDay)) {
+                // Check if current time is within blocked hours
+                if (currentTime >= block.startTime && currentTime <= block.endTime) {
+                    return true;
+                }
+            }
+        }
+    }
+    
+    return false;
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -234,7 +278,88 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 });
             }
         });
-    } else {
+    } else if (message.action === "addScheduledBlock") {
+        chrome.storage.sync.get(["globalPin", "scheduledBlocks"], (data) => {
+            if (data.globalPin === message.pin) {
+                const scheduledBlocks = data.scheduledBlocks || [];
+                
+                // Generate unique ID
+                const newBlock = {
+                    ...message.block,
+                    id: Date.now().toString()
+                };
+                
+                scheduledBlocks.push(newBlock);
+                chrome.storage.sync.set({ scheduledBlocks }, () => {
+                    sendResponseOnce({ 
+                        status: "Schedule added", 
+                        success: true,
+                        id: newBlock.id
+                    });
+                });
+            } else {
+                sendResponseOnce({ status: "incorrect PIN", success: false });
+            }
+        });
+    }
+    else if (message.action === "getScheduledBlocks") {
+        chrome.storage.sync.get(["scheduledBlocks"], (data) => {
+            sendResponseOnce({ 
+                blocks: data.scheduledBlocks || [],
+                success: true
+            });
+        });
+    }
+    else if (message.action === "updateScheduledBlock") {
+        chrome.storage.sync.get(["globalPin", "scheduledBlocks"], (data) => {
+            if (data.globalPin === message.pin) {
+                const scheduledBlocks = data.scheduledBlocks || [];
+                const index = scheduledBlocks.findIndex(block => block.id === message.block.id);
+                
+                if (index !== -1) {
+                    scheduledBlocks[index] = message.block;
+                    chrome.storage.sync.set({ scheduledBlocks }, () => {
+                        sendResponseOnce({ 
+                            status: "Schedule updated", 
+                            success: true 
+                        });
+                    });
+                } else {
+                    sendResponseOnce({ 
+                        status: "Schedule not found", 
+                        success: false 
+                    });
+                }
+            } else {
+                sendResponseOnce({ status: "incorrect PIN", success: false });
+            }
+        });
+    }
+    else if (message.action === "deleteScheduledBlock") {
+        chrome.storage.sync.get(["globalPin", "scheduledBlocks"], (data) => {
+            if (data.globalPin === message.pin) {
+                const scheduledBlocks = data.scheduledBlocks || [];
+                const filteredBlocks = scheduledBlocks.filter(block => block.id !== message.blockId);
+                
+                if (filteredBlocks.length < scheduledBlocks.length) {
+                    chrome.storage.sync.set({ scheduledBlocks: filteredBlocks }, () => {
+                        sendResponseOnce({ 
+                            status: "Schedule deleted", 
+                            success: true 
+                        });
+                    });
+                } else {
+                    sendResponseOnce({ 
+                        status: "Schedule not found", 
+                        success: false 
+                    });
+                }
+            } else {
+                sendResponseOnce({ status: "incorrect PIN", success: false });
+            }
+        });
+    }
+    else {
         sendResponseOnce({ status: "unknown action" });
     }
     return true; // Indicate that the response is asynchronous
@@ -266,6 +391,48 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
                                 }, 100);
                             }
                         });
+                    }
+                });
+            }
+        }
+    }
+});
+
+// Handle alarms for checking scheduled blocks
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+    if (alarm.name === "checkScheduledBlocks") {
+        // Get all tabs
+        const tabs = await chrome.tabs.query({});
+        
+        for (const tab of tabs) {
+            if (tab.url) {
+                const isBlocked = await isUrlBlocked(tab.url);
+                
+                // Try to get current block state of the tab
+                chrome.tabs.sendMessage(tab.id, { action: "checkOverlayStatus" }, (response) => {
+                    const hasOverlay = response && response.hasOverlay;
+                    
+                    // If should be blocked but doesn't have overlay
+                    if (isBlocked && !hasOverlay) {
+                        chrome.tabs.sendMessage(tab.id, { action: "addOverlay" }, (response) => {
+                            if (chrome.runtime.lastError) {
+                                // Inject script if not already there
+                                chrome.scripting.executeScript({
+                                    target: { tabId: tab.id },
+                                    files: ['contentScript.js']
+                                }, () => {
+                                    if (!chrome.runtime.lastError) {
+                                        setTimeout(() => {
+                                            chrome.tabs.sendMessage(tab.id, { action: "addOverlay" });
+                                        }, 100);
+                                    }
+                                });
+                            }
+                        });
+                    }
+                    // If shouldn't be blocked but has overlay
+                    else if (!isBlocked && hasOverlay) {
+                        chrome.tabs.sendMessage(tab.id, { action: "removeOverlay" });
                     }
                 });
             }

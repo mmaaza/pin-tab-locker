@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import "./Popup.css";
 import SetupPin from "./SetupPin";
 import BlockedUrlsList from "./BlockedUrlsList";
+import ScheduledBlocks from "./ScheduledBlocks";
 
 function Popup() {
     const [pin, setPin] = useState("");
@@ -10,6 +11,7 @@ function Popup() {
     const [isLoading, setIsLoading] = useState(true);
     const [isResetting, setIsResetting] = useState(false);
     const [viewingBlockedList, setViewingBlockedList] = useState(false);
+    const [viewingScheduledBlocks, setViewingScheduledBlocks] = useState(false);
     const [securityAnswer, setSecurityAnswer] = useState("");
     const [newPin, setNewPin] = useState("");
     const [confirmNewPin, setConfirmNewPin] = useState("");
@@ -156,6 +158,14 @@ function Popup() {
         setViewingBlockedList(false);
     };
 
+    const viewScheduledBlocks = () => {
+        setViewingScheduledBlocks(true);
+    };
+    
+    const exitScheduledBlocks = () => {
+        setViewingScheduledBlocks(false);
+    };
+
     // Show loading state
     if (isLoading) {
         return (
@@ -171,6 +181,10 @@ function Popup() {
 
     if (viewingBlockedList) {
         return <BlockedUrlsList onBack={exitBlockedUrlsList} />;
+    }
+    
+    if (viewingScheduledBlocks) {
+        return <ScheduledBlocks onBack={exitScheduledBlocks} />;
     }
 
     if (isResetting) {
@@ -240,7 +254,7 @@ function Popup() {
         <div className="popup-container">
             <h2 className="popup-title">
                 <span className="title-icon">🔒</span>
-                <span className="title-text">Tab Protec</span>
+                <span className="title-text">Tab Lockr</span>
             </h2>
 
             <div className="current-url">
@@ -282,6 +296,13 @@ function Popup() {
                 className="popup-button list-button"
             >
                 View Blocked URLs
+            </button>
+            
+            <button
+                onClick={viewScheduledBlocks}
+                className="popup-button schedule-button"
+            >
+                Scheduled Blocks
             </button>
 
             <button
