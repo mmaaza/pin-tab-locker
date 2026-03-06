@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import "./Popup.css";
 
-function BlockedUrlsList({ onBack, onUnblock }) {
+function BlockedUrlsList({ onBack, onUnblock, hideBack }) {
   const [blockedUrls, setBlockedUrls] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [pin, setPin] = useState("");
@@ -130,9 +130,11 @@ function BlockedUrlsList({ onBack, onUnblock }) {
 
       {status && <div className="status-message">{status}</div>}
 
-      <button onClick={onBack} className="popup-button back-button">
-        Back to Main
-      </button>
+      {!hideBack && (
+        <button onClick={onBack} className="popup-button back-button">
+          Back to Main
+        </button>
+      )}
     </div>
   );
 }

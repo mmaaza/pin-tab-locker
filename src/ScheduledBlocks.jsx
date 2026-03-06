@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import "./Popup.css";
 
-function ScheduledBlocks({ onBack }) {
+function ScheduledBlocks({ onBack, hideBack }) {
   const [blocks, setBlocks] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [pin, setPin] = useState("");
@@ -307,9 +307,11 @@ function ScheduledBlocks({ onBack }) {
         <button onClick={handleAddSchedule} className="popup-button lock-button">
           Add Schedule
         </button>
-        <button onClick={onBack} className="popup-button back-button">
-          Back
-        </button>
+        {!hideBack && (
+            <button onClick={onBack} className="popup-button back-button">
+              Back
+            </button>
+        )}
       </div>
     </div>
   );

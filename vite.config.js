@@ -7,8 +7,9 @@ export default defineConfig({
         rollupOptions: {
             input: {
                 main: "index.html",
-                background: "src/background.js", // Ensure background.js is included
-                contentScript: "src/contentScript.js" // Ensure contentScript.js is included
+                options: "options.html",
+                blocked: "blocked.html",
+                background: "src/background.js",
             },
             output: {
                 entryFileNames: "[name].js",
